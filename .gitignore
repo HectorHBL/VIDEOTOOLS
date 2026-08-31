@@ -1,0 +1,9 @@
+*.exe
+*.zip
+build/
+dist/
+__pycache__/
+*.pyc
+models/
+argos_models/
+wheels/

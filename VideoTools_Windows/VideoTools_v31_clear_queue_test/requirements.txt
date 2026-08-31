@@ -1,0 +1,10 @@
+pyinstaller
+faster-whisper
+vosk
+argostranslate
+pymupdf
+reportlab
+transformers
+tokenizers
+tkinterdnd2
+torch
