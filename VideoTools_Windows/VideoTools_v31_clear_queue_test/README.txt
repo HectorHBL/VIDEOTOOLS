@@ -28,3 +28,14 @@ Cambios principales:
 Los PDF escaneados sin texto seleccionable requieren OCR y se reportan como
 error R201. Para traducción offline, conserva las carpetas argos_models y
 models de la distribución integral.
+
+Compilación completa en otra PC
+-------------------------------
+Ejecuta PowerShell como usuario normal y usa:
+
+  powershell -ExecutionPolicy Bypass -File .\Instalar_y_compilar_completo.ps1
+
+El script descarga las librerías, FFmpeg, los modelos Argos y Helsinki; también
+descarga los modelos Whisper small, medium y large-v3 salvo que se use
+`-OmitirModelosWhisper`. Al terminar crea `Distribucion_completa` con el EXE,
+modelos y herramientas listas para mover a otra computadora.
