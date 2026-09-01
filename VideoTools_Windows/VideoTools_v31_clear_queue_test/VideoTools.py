@@ -1,6 +1,7 @@
 """VideoTools v36: cola mixta de vídeo, PDF y SRT con recuperación segura."""
 from __future__ import annotations
 import json, math, os, queue, re, shutil, subprocess, sys, threading, time, urllib.request, wave, zipfile
+from datetime import datetime
 try: import winsound
 except ImportError: winsound=None
 import argostranslate.package, argostranslate.translate, argostranslate.settings
@@ -96,7 +97,7 @@ class App(APP_WINDOW):
         super().__init__();self.title("VideoTools v36");self.conversion_profile=tk.StringVar(value=next(iter(CONVERSION_PROFILES)));self.icon_path=resource_path("VideoTools.ico")
         try:self.iconbitmap(default=str(self.icon_path))
         except tk.TclError:pass
-        self.geometry("1180x735");self.minsize(900,590);self.parts,self.convert,self.burn=tk.IntVar(value=1),tk.BooleanVar(value=True),tk.BooleanVar(value=False);self.transcribe_only=tk.BooleanVar(value=False);self.translate_only=tk.BooleanVar(value=False);self.translation_choice=tk.StringVar(value="Automático");self.run_translate=False;self.engine_name=tk.StringVar(value="faster-whisper (preciso)");self.model_name=tk.StringVar(value="small");self.audio_language=tk.StringVar(value="Auto");self.run_srt_only=False;self.run_convert=False;self.run_engine="whisper";self.run_model="small";self.run_language=None;self.whisper_models={};self.vosk_models={};self.es_en_hf=None;self.jobs={};self.n=0;self.events=queue.Queue();self.status=tk.StringVar(value="Añade vídeo, PDF o SRT a la cola.");self.current=tk.StringVar(value="Sin proceso activo");self.stage_widgets={};self.stop_event=threading.Event();self.pause_event=threading.Event();self.active_process=None;self.ui();self.protocol("WM_DELETE_WINDOW",self.on_close);self.after(100,self.receive)
+        self.geometry("1180x735");self.minsize(780,500);self.parts,self.convert,self.burn=tk.IntVar(value=1),tk.BooleanVar(value=True),tk.BooleanVar(value=False);self.transcribe_only=tk.BooleanVar(value=False);self.translate_only=tk.BooleanVar(value=False);self.translation_choice=tk.StringVar(value="Automático");self.run_translate=False;self.engine_name=tk.StringVar(value="faster-whisper (preciso)");self.model_name=tk.StringVar(value="small");self.audio_language=tk.StringVar(value="Auto");self.run_srt_only=False;self.run_convert=False;self.run_engine="whisper";self.run_model="small";self.run_language=None;self.whisper_models={};self.vosk_models={};self.es_en_hf=None;self.jobs={};self.n=0;self.events=queue.Queue();self.status=tk.StringVar(value="Añade vídeo, PDF o SRT a la cola.");self.current=tk.StringVar(value="Sin proceso activo");self.stage_widgets={};self.stop_event=threading.Event();self.pause_event=threading.Event();self.active_process=None;self.ui();self.protocol("WM_DELETE_WINDOW",self.on_close);self.after(100,self.receive)
         self.run_burn=False;self.run_translation_choice="Automático";self.clearing=False;self.last_progress_marker=None
     def ui(self):
         box=ttk.Frame(self,padding=16);box.pack(fill="both",expand=True);box.columnconfigure(0,weight=1);box.rowconfigure(3,weight=1)
@@ -712,7 +713,7 @@ class App(APP_WINDOW):
                 elif kind=="progress":
                     _,label,percent=e;percent=max(0,min(100,percent));self.status.set(f"{label}: {percent:.0f}%")
                     marker=(label,int(percent)//5)
-                    if marker!=self.last_progress_marker:self.last_progress_marker=marker;self.addlog(f"{label}: {percent:.0f}%.\n")
+                    if marker!=self.last_progress_marker:self.last_progress_marker=marker;self.addlog(f"{label}: {percent:.0f}% a las {datetime.now().strftime('%I:%M %p').lstrip('0').lower()}.\n")
                 elif kind=="stopped":
                     _,k,i,total=e;self.jobs[k].status="DETENIDO";self.refresh(k);self.status.set("Proceso detenido; los renglones restantes permanecen en ESPERA.")
                 elif kind=="ok":
@@ -724,4 +725,6 @@ class App(APP_WINDOW):
         self.after(100,self.receive)
     def addlog(self,text):self.log.configure(state="normal");self.log.insert("end",text);self.log.see("end");self.log.configure(state="disabled")
 if __name__=="__main__":App().mainloop()
+
+
 
