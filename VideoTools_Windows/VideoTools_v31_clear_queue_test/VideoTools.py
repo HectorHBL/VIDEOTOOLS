@@ -1,6 +1,6 @@
 """VideoTools v36: cola mixta de vídeo, PDF y SRT con recuperación segura."""
 from __future__ import annotations
-import json, math, os, queue, re, shutil, subprocess, sys, threading, time, urllib.request, wave, zipfile
+import ctypes, json, math, os, queue, re, shutil, subprocess, sys, threading, time, urllib.request, wave, zipfile
 from datetime import datetime
 try: import winsound
 except ImportError: winsound=None
@@ -97,7 +97,7 @@ class App(APP_WINDOW):
         super().__init__();self.title("VideoTools v36");self.conversion_profile=tk.StringVar(value=next(iter(CONVERSION_PROFILES)));self.icon_path=resource_path("VideoTools.ico")
         try:self.iconbitmap(default=str(self.icon_path))
         except tk.TclError:pass
-        self.geometry("1180x735");self.minsize(780,500);self.parts,self.convert,self.burn=tk.IntVar(value=1),tk.BooleanVar(value=True),tk.BooleanVar(value=False);self.transcribe_only=tk.BooleanVar(value=False);self.translate_only=tk.BooleanVar(value=False);self.translation_choice=tk.StringVar(value="Automático");self.run_translate=False;self.engine_name=tk.StringVar(value="faster-whisper (preciso)");self.model_name=tk.StringVar(value="small");self.audio_language=tk.StringVar(value="Auto");self.run_srt_only=False;self.run_convert=False;self.run_engine="whisper";self.run_model="small";self.run_language=None;self.whisper_models={};self.vosk_models={};self.es_en_hf=None;self.jobs={};self.n=0;self.events=queue.Queue();self.status=tk.StringVar(value="Añade vídeo, PDF o SRT a la cola.");self.current=tk.StringVar(value="Sin proceso activo");self.stage_widgets={};self.stop_event=threading.Event();self.pause_event=threading.Event();self.active_process=None;self.ui();self.protocol("WM_DELETE_WINDOW",self.on_close);self.after(100,self.receive)
+        self.geometry("1180x735");self.minsize(780,500);self.parts,self.convert,self.burn=tk.IntVar(value=1),tk.BooleanVar(value=True),tk.BooleanVar(value=False);self.transcribe_only=tk.BooleanVar(value=False);self.translate_only=tk.BooleanVar(value=False);self.translation_choice=tk.StringVar(value="Automático");self.run_translate=False;self.engine_name=tk.StringVar(value="faster-whisper (preciso)");self.model_name=tk.StringVar(value="small");self.audio_language=tk.StringVar(value="Auto");self.run_srt_only=False;self.run_convert=False;self.run_engine="whisper";self.run_model="small";self.run_language=None;self.whisper_models={};self.vosk_models={};self.es_en_hf=None;self.jobs={};self.n=0;self.events=queue.Queue();self.status=tk.StringVar(value="Añade vídeo, PDF o SRT a la cola.");self.current=tk.StringVar(value="Sin proceso activo");self.stage_widgets={};self.stop_event=threading.Event();self.pause_event=threading.Event();self.active_process=None;self.preventing_sleep=False;self.ui();self.protocol("WM_DELETE_WINDOW",self.on_close);self.after(100,self.receive)
         self.run_burn=False;self.run_translation_choice="Automático";self.clearing=False;self.last_progress_marker=None
     def ui(self):
         box=ttk.Frame(self,padding=16);box.pack(fill="both",expand=True);box.columnconfigure(0,weight=1);box.rowconfigure(3,weight=1)
@@ -255,6 +255,14 @@ class App(APP_WINDOW):
     def add_pdfs(self):
         for x in filedialog.askopenfilenames(title="Añade PDF(s) con texto seleccionable",filetypes=PDF_TYPES):
             v=Path(x);self.n+=1;k=str(self.n);self.jobs[k]=Job(v,parts=1,manual_parts=True);self.tree.insert("","end",iid=k,values=self.values(self.jobs[k]))
+    def keep_awake(self, enabled):
+        """Evita la suspensión automática de Windows mientras hay una cola activa."""
+        if os.name != "nt": return
+        try:
+            flags = 0x80000000 | (0x00000001 if enabled else 0)
+            ctypes.windll.kernel32.SetThreadExecutionState(flags)
+            self.preventing_sleep = enabled
+        except Exception: pass
     def on_close(self):
         active = self.active_process is not None or self.start.cget("state") == "disabled"
         text = "¿Deseas cerrar VideoTools?"
@@ -263,13 +271,14 @@ class App(APP_WINDOW):
         if active:
             self.stop_queue()
             self.after(400, self.finish_close)
-        else: self.destroy()
+        else: self.keep_awake(False);self.destroy()
     def finish_close(self):
         p = self.active_process
         if p and p.poll() is None:
             try: p.terminate()
             except OSError: pass
             self.after(300, self.finish_close); return
+        self.keep_awake(False)
         self.destroy()
     def selected(self):
         x=self.tree.selection()
@@ -300,6 +309,7 @@ class App(APP_WINDOW):
         for x in (self.translate_choice_box,self.engine_box,self.model_box,self.lang_box):x.configure(state=combo_state)
         self.profile_box.configure(state=combo_state if self.convert.get() else "disabled")
         if state == "normal":
+            self.keep_awake(False)
             self.start.configure(text="INICIAR PROCESOS EN ARCHIVOS",bg="#FFF2CC",activebackground="#FFE699")
             self.pause_button.configure(state="disabled", text="Pausar")
             self.stop_button.configure(state="disabled")
@@ -333,7 +343,7 @@ class App(APP_WINDOW):
             if not self.run_translate and any(self.jobs[k].parts<1 for k in video_keys):raise ValueError("No se pudo calcular el número de partes.")
             if video_keys and self.run_srt_only and self.run_engine=="vosk" and self.run_language is None:raise ValueError("Vosk requiere elegir Español o Inglés.")
         except Exception as e:messagebox.showerror("VideoTools v36",str(e),parent=self);return
-        self.build_stages(any(self.jobs[k].spanish for k in keys),any(self.jobs[k].english for k in keys));self.bar["value"]=0;self.stop_event.clear();self.pause_event.clear();self.start.configure(text="CORRIENDO PROCESOS EN ARCHIVOS",bg="#B7C98A",activebackground="#A6B879");self.pause_button.configure(state="normal",text="Pausar");self.stop_button.configure(state="normal");self.controls("disabled");threading.Thread(target=self.queue_run,args=(keys,),daemon=True).start()
+        self.build_stages(any(self.jobs[k].spanish for k in keys),any(self.jobs[k].english for k in keys));self.bar["value"]=0;self.stop_event.clear();self.pause_event.clear();self.start.configure(text="CORRIENDO PROCESOS EN ARCHIVOS",bg="#B7C98A",activebackground="#A6B879");self.pause_button.configure(state="normal",text="Pausar");self.stop_button.configure(state="normal");self.controls("disabled");self.keep_awake(True);self.addlog("Protección contra suspensión automática activada mientras la cola está en ejecución.\n");threading.Thread(target=self.queue_run,args=(keys,),daemon=True).start()
     def validate(self,j):
         if j.video.suffix.casefold()==".pdf":
             if not j.video.is_file():raise ProcessError("R201",f"No existe el PDF: {j.video}")
@@ -725,6 +735,7 @@ class App(APP_WINDOW):
         self.after(100,self.receive)
     def addlog(self,text):self.log.configure(state="normal");self.log.insert("end",text);self.log.see("end");self.log.configure(state="disabled")
 if __name__=="__main__":App().mainloop()
+
 
 
 
