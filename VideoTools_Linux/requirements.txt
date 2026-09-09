@@ -11,3 +11,4 @@ torch
 keyring
 yt-dlp
 tkinterdnd2
+tkinterdnd2
